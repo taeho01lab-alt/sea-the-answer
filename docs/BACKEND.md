@@ -1,3 +1,5 @@
+> 이 문서는 보존된 Node.js·SQLite MVP 전용입니다. 현재 기본 스택은 [README](../README.md)와 [설계 대응](DESIGN.md)을 참고하세요.
+
 # RAG / DB / Tool 구현
 
 처음 실행하거나 구현 흐름을 따라가려면 [README](../README.md)를 먼저 보세요. README를 기본 실행·구현 안내서로 유지하며, 이 문서는 백엔드의 세부 동작과 제한 사항을 설명합니다.

@@ -6,3 +6,11 @@ data/
 .env
 .env.*
 !.env.example
+.venv/
+.tools/
+__pycache__/
+.pytest_cache/
+.next/
+*.pyc
+.env.local
+pytest-cache-files-*/
