@@ -14,4 +14,4 @@ dependencies = [
 dev = ["pytest>=8,<10"]
 
 [tool.pytest.ini_options]
-testpaths = ["service/tests"]
+testpaths = ["service/tests", "tools/maritime_data/tests"]
