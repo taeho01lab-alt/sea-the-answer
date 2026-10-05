@@ -4,7 +4,7 @@
 
 ## 실행 및 접근
 
-현재 역할4 전용 API는 `python -m uvicorn service.app:create_app --factory --host 127.0.0.1 --port 8000`으로 실행합니다. 모든 Tool 요청에 `Authorization: Bearer <ROLE4_API_TOKEN>`이 필요합니다. 토큰은 서버의 `.env.local`에 설정하며 로그인 세션·CSRF·기존 public 앱 테이블은 사용하지 않습니다. 실행 예제는 루트 README를 참고하세요.
+현재 역할4 전용 API는 `python -m uvicorn service.role4_standalone:create_app --factory --host 127.0.0.1 --port 8001`으로 실행합니다. 모든 Tool 요청에 `Authorization: Bearer <ROLE4_API_TOKEN>`이 필요합니다. 토큰은 서버의 `.env.local`에 설정하며 로그인 세션·CSRF·기존 public 앱 테이블은 사용하지 않습니다. 실행 예제는 루트 README를 참고하세요.
 
 내부 Python 진입점은 `service.role4.query(engine, body)`입니다. 팀 앱에 직접 연결할 때는 호출자가 사용자 권한을 검사해야 합니다. `/api/role4/ask`는 고정 scope의 규칙 기반 조회 도우미이며 LLM 연결은 포함하지 않습니다.
 
@@ -69,3 +69,5 @@ DB 예외의 SQL·연결 문자열은 응답에 노출하지 않습니다. 자�
 2026-09-30 실행 결과: PostgreSQL 테스트를 활성화한 전체 서비스 48개 통과. 이어서 DB 오류 메시지 보호 및 실제 트랜잭션 설정·Noon 전체 페이지 검증을 보강한 역할 4 테스트 21개 통과. Starlette TestClient의 httpx 사용 관련 폐기 예정 경고 1건이 있으며 실패는 없습니다.
 
 실제 DB에서 MRV 79,032행, Noon 4,380행과 거리 0인 557행을 확인했습니다. 페이지 중복 없음, 날짜·선박·항차 필터, 빈 결과, 원본 numeric 정밀도·NULL·출처 보존, READ ONLY/REPEATABLE READ/5초 제한을 검증했습니다. 기존 `verify_load.sql` 적재 검증도 읽기 전용으로 재실행하여 통과했습니다. 생성기의 데이터 계약·DDL·사전 출력이 저장된 파일과 일치합니다. 실제 LLM 추론·화면 연결 검증은 이 범위에 포함하지 않습니다.
+
+통합 웹 API(8000)는 관리자 로그인 세션과 POST CSRF를 사용합니다. 역할4 독립 API(8001)는 기존 Bearer 토큰을 사용합니다. 조회·계산 모듈과 데이터 계약은 공유합니다.

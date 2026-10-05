@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from service.app import create_app
+from service.role4_standalone import create_app
 
 TOKEN = 'test-only-role4-token-12345678901234567890'
 
