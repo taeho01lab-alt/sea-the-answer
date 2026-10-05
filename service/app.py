@@ -20,9 +20,9 @@ from .security import password_hash, password_valid, hash_token, session_user, r
 from .calculations import NoonInput, metrics, report_text
 from .retrieval import Search, pdf_sections, chunk_sections
 from .llm import Gateway
-from . import role4
-from . import role4_agent
-from . import role4_calculations
+from . import maritime_data
+from . import maritime_data_agent
+from . import maritime_data_calculations
 
 load_dotenv('.env.local')
 log = logging.getLogger('haedap')
@@ -175,40 +175,40 @@ def create_app(db_url=None, search=None, gateway=None):
         except Exception: pass
         return JSONResponse({'detail':'처리를 완료하지 못했습니다. 관리자에게 문의하세요.'},status_code=500)
 
-    @app.get('/api/role4/factors')
-    def role4_factors(request: Request):
+    @app.get('/api/maritime-data/factors')
+    def maritime_data_factors(request: Request):
         with sessions() as db:
             auth(db, request, 'admin')
-            return role4_calculations.catalog()
+            return maritime_data_calculations.catalog()
 
-    @app.post('/api/role4/calculate')
-    def role4_calculate(body: role4_calculations.CalculationRequest, request: Request):
+    @app.post('/api/maritime-data/calculate')
+    def maritime_data_calculate(body: maritime_data_calculations.CalculationRequest, request: Request):
         with sessions() as db:
             user, _ = auth(db, request, 'admin')
-            result = role4_calculations.calculate(engine, body)
-            audit(db, user, 'role4.calculate', body.scope.vessel_id,
+            result = maritime_data_calculations.calculate(engine, body)
+            audit(db, user, 'maritime_data.calculate', body.scope.vessel_id,
                   {'request': body.model_dump(mode='json'), 'version': result['version'],
                    'status': result['status'], 'record_count': result['record_count']})
             db.commit()
             return result
 
-    @app.post('/api/role4/ask')
-    def role4_ask(body: role4_agent.Ask, request: Request):
+    @app.post('/api/maritime-data/ask')
+    def maritime_data_ask(body: maritime_data_agent.Ask, request: Request):
         with sessions() as db:
             user, _ = auth(db, request, 'admin')
-            result = role4_agent.run(engine, gateway, body)
-            audit(db, user, 'role4.ask', body.scope.dataset,
+            result = maritime_data_agent.run(engine, gateway, body)
+            audit(db, user, 'maritime_data.ask', body.scope.dataset,
                   {'question': body.question, 'scope': body.scope.model_dump(mode='json'),
                    'routing': result['routing'], 'actions': result['actions']})
             db.commit()
             return result
 
-    @app.post('/api/role4/query')
-    def role4_query(body: role4.Role4Query, request: Request):
+    @app.post('/api/maritime-data/query')
+    def maritime_data_query(body: maritime_data.MaritimeDataQuery, request: Request):
         with sessions() as db:
             user, _ = auth(db, request, 'admin')
-            result = role4.query(engine, body)
-            audit(db, user, 'role4.query', body.dataset,
+            result = maritime_data.query(engine, body)
+            audit(db, user, 'maritime_data.query', body.dataset,
                   {'filters': body.model_dump(mode='json'), 'total': result['total'],
                    'returned': len(result['rows'])})
             db.commit()

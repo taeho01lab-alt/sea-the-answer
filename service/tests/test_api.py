@@ -1,16 +1,16 @@
 import pytest
 from fastapi.testclient import TestClient
-from service.role4_standalone import create_app
-from service import role4, role4_calculations
+from service.maritime_data_standalone import create_app
+from service import maritime_data, maritime_data_calculations
 from service.tests.api_support import app, login, TOKEN
 
 QUERY = {'dataset': 'real_annual', 'year_start': 2020, 'year_end': 2025}
 CALC = {'scope': {'dataset': 'real_annual', 'vessel_id': 'REAL:IMO:1234567', 'year': 2020}}
 
 @pytest.mark.parametrize('path,payload', [
-    ('/api/role4/query', QUERY), ('/api/role4/calculate', CALC),
-    ('/api/role4/ask', {'question': '기록 조회', 'scope': QUERY}),
-    ('/api/role4/factors', None)])
+    ('/api/maritime-data/query', QUERY), ('/api/maritime-data/calculate', CALC),
+    ('/api/maritime-data/ask', {'question': '기록 조회', 'scope': QUERY}),
+    ('/api/maritime-data/factors', None)])
 def test_all_tools_require_token(app, path, payload):
     client = TestClient(app)
     def request(headers):
@@ -21,26 +21,26 @@ def test_all_tools_require_token(app, path, payload):
 
 def test_query_validation_and_dispatch(app, monkeypatch):
     seen = []
-    monkeypatch.setattr(role4, 'query', lambda engine, body: seen.append(body) or {'rows': [], 'total': 0})
+    monkeypatch.setattr(maritime_data, 'query', lambda engine, body: seen.append(body) or {'rows': [], 'total': 0})
     client = login(app)
-    assert client.post('/api/role4/query', json={**QUERY, 'sql': 'SELECT 1'}).status_code == 422
+    assert client.post('/api/maritime-data/query', json={**QUERY, 'sql': 'SELECT 1'}).status_code == 422
     assert not seen
-    assert client.post('/api/role4/query', json=QUERY).json()['total'] == 0
+    assert client.post('/api/maritime-data/query', json=QUERY).json()['total'] == 0
     assert len(seen) == 1
 
 def test_calculation_dispatch_and_factors(app, monkeypatch):
-    monkeypatch.setattr(role4_calculations, 'calculate', lambda engine, body: {'status': 'blocked'})
+    monkeypatch.setattr(maritime_data_calculations, 'calculate', lambda engine, body: {'status': 'blocked'})
     client = login(app)
-    assert client.get('/api/role4/factors').json()['factors']['HFO'] == '3.114'
-    assert client.post('/api/role4/calculate', json=CALC).json()['status'] == 'blocked'
+    assert client.get('/api/maritime-data/factors').json()['factors']['HFO'] == '3.114'
+    assert client.post('/api/maritime-data/calculate', json=CALC).json()['status'] == 'blocked'
 
 def test_rule_helper_rejects_unsupported_and_preserves_scope(app, monkeypatch):
     seen = []
-    monkeypatch.setattr(role4, 'query', lambda engine, body: seen.append(body.model_dump()) or {'rows': [], 'total': 0})
+    monkeypatch.setattr(maritime_data, 'query', lambda engine, body: seen.append(body.model_dump()) or {'rows': [], 'total': 0})
     client = login(app)
-    result = client.post('/api/role4/ask', json={'question': 'CII 등급 계산', 'scope': QUERY}).json()
+    result = client.post('/api/maritime-data/ask', json={'question': 'CII 등급 계산', 'scope': QUERY}).json()
     assert result['result'] is None and not seen
-    result = client.post('/api/role4/ask', json={'question': '기록 조회', 'scope': QUERY, 'use_model': True}).json()
+    result = client.post('/api/maritime-data/ask', json={'question': '기록 조회', 'scope': QUERY, 'use_model': True}).json()
     assert result['routing'] == 'rules' and 'LLM_NOT_CONFIGURED' in result['warnings']
     assert seen[0]['year_start'] == QUERY['year_start']
 
