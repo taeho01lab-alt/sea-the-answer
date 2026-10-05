@@ -15,7 +15,7 @@ __pycache__/
 .env.local
 pytest-cache-files-*/
 
-outputs/role4-2026-09-30/
+outputs/maritime-data-2026-09-30/
 outputs/
 tmp/
 *.log

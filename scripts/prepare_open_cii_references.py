@@ -1,6 +1,6 @@
 """Prepare open reference data that can support, but not certify, CII work.
 
-The script deliberately keeps these datasets outside the PostgreSQL role4 schema.
+The script deliberately keeps these datasets outside the PostgreSQL maritime_data schema.
 IMO DCS reports are aggregated and anonymized. Wikidata and MarineVessels ship
 particulars are useful candidate values, but are not verified statutory records.
 """
@@ -15,7 +15,7 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA = ROOT / "data" / "role4" / "2026-09-30-v2"
+DATA = ROOT / "data" / "maritime_data" / "2026-09-30-v2"
 REFERENCE = DATA / "reference"
 OUTPUT = REFERENCE / "open-cii-inputs"
 MARINE = REFERENCE / "marine-vessels-2015" / "marine_vessels.csv"

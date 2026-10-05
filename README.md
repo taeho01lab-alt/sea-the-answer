@@ -4,19 +4,38 @@
 
 문서 근거 검색, 운항 조회, Python 배출량 계산, Noon/MRV 초안을 연결합니다. 캡스톤 설계의 **Next.js + Python Tool + PostgreSQL + ChromaDB**를 기본 실행 스택으로 전환했습니다. 기존 Node.js·SQLite MVP와 데이터도 별도로 유지합니다.
 
-## 저장소 통합 및 역할4 API (2026-10-05)
+## 해사 데이터 명칭과 기존 환경 전환 (2026-10-05)
 
-`dudco/sea-the-answer`의 웹 MVP와 로컬 캡스톤의 Next.js·Python 스택을 사용자 레포의 역할4 코드에 통합했습니다. 기존 역할4 조회·계산 로직, 전처리 스크립트, 데이터 계약과 PDF는 유지합니다.
+화면 명칭은 **해사 데이터**, Python 모듈·DB 스키마·환경변수 접두사는 `maritime_data` / `MARITIME_DATA`, 폴더·API 경로는 `maritime-data`로 통일했습니다. 팀 역할 번호 대신 기능명으로 조회·계산·전처리·문서를 찾을 수 있습니다.
+
+기존 DB가 있는 경우 서버를 중지하고 저장소 루트에서 아래 명령을 실행합니다. 첫 명령은 변경 여부를 확인하고 두 번째 명령이 실제 이름을 변경합니다. `.env.local`의 `DATABASE_URL`에 기존 DB 주소를 설정해야 하며 스키마 소유자 권한이 필요합니다.
+
+```powershell
+.\.venv\Scripts\python.exe scripts/migrate_maritime_data.py
+.\.venv\Scripts\python.exe scripts/migrate_maritime_data.py --apply
+```
+
+이 마이그레이션은 기존 스키마 이름을 `maritime_data`로 변경하고 `.env.local`의 API 토큰·테스트 DB 설정 키를 새 이름으로 바꿉니다. 테이블·뷰·데이터·권한을 유지하며 재적재하거나 레코드를 수정하지 않습니다. 두 스키마가 함께 있거나 새 설정과 기존 설정 값이 충돌하면 중단합니다. 설정 변경 전 `.env.local.before-maritime-data` 백업을 남깁니다. DB 작업과 설정 파일 저장은 별개이므로 파일 저장 오류 시 권한을 확인하고 같은 명령을 다시 실행하세요. 이미 전환된 DB에 재실행해도 이름을 다시 바꾸지 않습니다.
+
+실행 중인 프로세스나 외부 배포 설정의 환경변수는 자동 변경하지 않습니다. `MARITIME_DATA_API_TOKEN` / `MARITIME_DATA_TEST_DATABASE_URL`로 갱신하고, 외부 API 클라이언트는 `/api/maritime-data/*`를 사용하세요. 독립 API의 실행 모듈은 `service.maritime_data_standalone:create_app`입니다. 기존 모듈명·URL은 더 이상 제공하지 않습니다.
+
+기존 CSV 폴더는 이동하지 않습니다. 적재할 때 `scripts/load-maritime-data.ps1 -DataDir '기존 CSV 폴더 경로'`를 사용하거나, 신규 결과를 `data/maritime-data/` 아래에 생성하세요. 원본 파일·출처·체크섬은 기존 값 그대로 유지합니다. 신규 DB 설치는 마이그레이션 없이 아래 실행 절차를 따릅니다.
+
+검증: Python 80개 통과·실제 PostgreSQL 테스트 4개 건너뜀, 전처리 3개 통과, 웹 프로덕션 빌드 성공. 실제 DB 마이그레이션은 이번 환경에서 실행하지 않았습니다.
+
+## 저장소 통합 및 해사 데이터 API (2026-10-05)
+
+`dudco/sea-the-answer`의 웹 MVP와 로컬 캡스톤의 Next.js·Python 스택을 사용자 레포의 해사 데이터 코드에 통합했습니다. 기존 해사 데이터 조회·계산 로직, 전처리 스크립트, 데이터 계약과 PDF는 유지합니다.
 
 - 기본 웹 앱: `npm start`, http://127.0.0.1:3000 . Python API는 8000입니다. 아래 설치 절차의 `uv sync --frozen`과 `npm ci --prefix web`을 사용합니다.
 - 원본 웹 MVP: `npm run legacy` 또는 `start.cmd`, http://127.0.0.1:5173 . 별도 SQLite DB를 사용합니다.
-- 역할4 독립 API: `.\.venv\Scripts\python.exe -m uvicorn service.role4_standalone:create_app --factory --host 127.0.0.1 --port 8001` . 기존 Bearer 토큰 계약을 유지합니다. 토큰 클라이언트의 주소를 8001로 변경하세요. API 명세는 http://127.0.0.1:8001/docs 입니다.
+- 해사 데이터 독립 API: `.\.venv\Scripts\python.exe -m uvicorn service.maritime_data_standalone:create_app --factory --host 127.0.0.1 --port 8001` . 기존 Bearer 토큰 계약을 유지합니다. 토큰 클라이언트의 주소를 8001로 변경하세요. API 명세는 http://127.0.0.1:8001/docs 입니다.
 
-기존 역할4 환경이 있다면 `.env.local`과 DB를 유지하고 `.venv`에 `uv sync --frozen`으로 통합 의존성을 설치합니다. 역할4 전용 `requirements.lock.txt`는 독립 API용이며 전체 웹 앱 의존성을 포함하지 않습니다. 신규 웹 설치에는 아래 준비·실행 절차를 따르세요. 기존 DB를 사용할 때는 `python -m service.manage bootstrap`으로 앱 계정·테이블·샘플을 추가한 후 실행합니다. 이 명령은 public 스키마에 앱 테이블을 만들므로 DB 계정에 해당 권한이 필요하며 기존 role4 스키마와 데이터를 재적재하지 않습니다.
+기존 해사 데이터 환경이 있다면 `.env.local`과 DB를 유지하고 `.venv`에 `uv sync --frozen`으로 통합 의존성을 설치합니다. 해사 데이터 전용 `requirements.lock.txt`는 독립 API용이며 전체 웹 앱 의존성을 포함하지 않습니다. 신규 웹 설치에는 아래 준비·실행 절차를 따르세요. 기존 DB를 사용할 때는 `python -m service.manage bootstrap`으로 앱 계정·테이블·샘플을 추가한 후 실행합니다. 이 명령은 public 스키마에 앱 테이블을 만들므로 DB 계정에 해당 권한이 필요하며 기존 maritime_data 스키마와 데이터를 재적재하지 않습니다.
 
-웹 앱의 관리자 계정으로 로그인하면 **정형 데이터** 탭에서 MRV·합성 Noon 조회와 조회 도우미를 사용할 수 있습니다. 웹의 `/api/role4/query`, `/calculate`, `/ask`, `/factors`는 관리자 세션으로 접근하며 POST에는 CSRF 토큰이 필요합니다. 계산은 API로 제공하며 조회 화면에는 자동 연결하지 않습니다. 일반·담당자 계정은 역할4 전체 조회에 접근하지 못합니다.
+웹 앱의 관리자 계정으로 로그인하면 **해사 데이터** 탭에서 MRV·합성 Noon 조회와 조회 도우미를 사용할 수 있습니다. 웹의 `/api/maritime-data/query`, `/calculate`, `/ask`, `/factors`는 관리자 세션으로 접근하며 POST에는 CSRF 토큰이 필요합니다. 계산은 API로 제공하며 조회 화면에는 자동 연결하지 않습니다. 일반·담당자 계정은 해사 데이터 전체 조회에 접근하지 못합니다.
 
-독립 API는 기존 `DATABASE_URL`과 32자 이상의 `ROLE4_API_TOKEN`을 사용합니다. 웹 앱은 토큰을 브라우저에 전달하지 않으며 로그인 세션을 사용합니다. 두 API가 같은 role4 조회·계산 모듈을 호출하므로 데이터 계약·십진 문자열·실제/합성 구분은 같습니다. 원본 데이터와 DB를 포함하지 않으며 최초 데이터 적재는 `scripts/load-role4.ps1`과 [데이터 확보 안내](docs/role4/DATA_ACCESS.md)를 참고하세요.
+독립 API는 기존 `DATABASE_URL`과 32자 이상의 `MARITIME_DATA_API_TOKEN`을 사용합니다. 웹 앱은 토큰을 브라우저에 전달하지 않으며 로그인 세션을 사용합니다. 두 API가 같은 maritime_data 조회·계산 모듈을 호출하므로 데이터 계약·십진 문자열·실제/합성 구분은 같습니다. 원본 데이터와 DB를 포함하지 않으며 최초 데이터 적재는 `scripts/load-maritime-data.ps1`과 [데이터 확보 안내](docs/maritime-data/DATA_ACCESS.md)를 참고하세요.
 
 ## 구현 범위
 
@@ -163,26 +182,28 @@ API 추가 시 서버에서 역할/선박/문서 권한을 확인하고 쓰기�
 
 ## 기존 MVP 및 변경 이력
 
-- **2026-10-05:** 사용자 main의 역할4 전용 API를 보존하면서 원본 웹 MVP·캡스톤 앱 복원, 관리자 세션 기반 역할4 조회와 감사 기록 통합. 검증 결과는 `docs/INTEGRATION.md` 참고.
+- **2026-10-05:** 역할 번호 대신 해사 데이터 기능명으로 모듈·파일·API·환경변수·DB·문서·PDF 통일, 데이터 재적재 없는 이름 전환 마이그레이션 추가.
+
+- **2026-10-05:** 사용자 main의 해사 데이터 전용 API를 보존하면서 원본 웹 MVP·캡스톤 앱 복원, 관리자 세션 기반 해사 데이터 조회와 감사 기록 통합. 검증 결과는 `docs/INTEGRATION.md` 참고.
 
 `npm run legacy` 또는 기존 `start.cmd`/`start.ps1`은 Node.js·SQLite 버전을 5173에서 실행합니다. 새 버전과 계정·보고서 DB를 공유하지 않습니다. [기존 안내](docs/LEGACY_MVP.md), [기존 백엔드](docs/BACKEND.md), [설계 대응](docs/DESIGN.md)을 참고하세요.
 
 - **2026-09-29:** 설계 스택으로 기본 실행 전환, 인증/역할·PDF/개정/RAG·Python 계산·보고서/이력·백업복원. 기존 MVP·데이터 보존, 실행 경로 구분.
 - 이전 변경 내역은 기존 README 보관본에 있습니다.
 
-## 역할 4 데이터 전처리 (2026-09-30)
+## 해사 데이터 전처리 (2026-09-30)
 
-실제 MRV 보고기간 집계와 합성 Noon 개발 데이터를 분리했습니다. [데이터 계약·ERD](docs/role4/ROLE4_DATA_CONTRACT.md), [실행 결과](docs/role4/VALIDATION.md)를 참고하세요. 새 정의는 기존 19개 테이블 초안 전체를 대체하지 않습니다. 적재 스크립트와 검증 SQL을 제공합니다. 기존 role4 스키마는 덮어쓰지 않으며 원본·전처리 CSV와 실제 DB는 Git에 포함하지 않습니다.
+실제 MRV 보고기간 집계와 합성 Noon 개발 데이터를 분리했습니다. [데이터 계약·ERD](docs/maritime-data/DATA_CONTRACT.md), [실행 결과](docs/maritime-data/VALIDATION.md)를 참고하세요. 새 정의는 기존 19개 테이블 초안 전체를 대체하지 않습니다. 적재 스크립트와 검증 SQL을 제공합니다. 기존 maritime_data 스키마는 덮어쓰지 않으며 원본·전처리 CSV와 실제 DB는 Git에 포함하지 않습니다.
 
 원본 6개 파일이 있는 폴더를 지정합니다. 하위 폴더도 탐색하며 같은 이름이 둘 이상이면 중단합니다. 원본은 읽기만 하고 결과 폴더는 매번 새 이름을 사용합니다.
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r scripts/requirements-role4.txt
-.\.venv\Scripts\python.exe scripts/prepare_role4.py --source 'D:/Data' --out data/role4/new-run
-.\.venv\Scripts\python.exe scripts/test_prepare_role4.py
-.\.venv\Scripts\python.exe scripts/describe_role4.py --out docs/role4
+.\.venv\Scripts\python.exe -m pip install -r scripts/requirements-maritime-data.txt
+.\.venv\Scripts\python.exe scripts/prepare_maritime_data.py --source 'D:/Data' --out data/maritime-data/new-run
+.\.venv\Scripts\python.exe scripts/test_prepare_maritime_data.py
+.\.venv\Scripts\python.exe scripts/describe_maritime_data.py --out docs/maritime-data
 ```
 
 실행 결과는 원본 체크섬·출처 목록, 별도 연간/합성 일별 CSV, 선박·가상 항차 키, 품질 이슈 CSV, 원본 레코드 JSONL, summary.json입니다. 빈 값은 임의로 0이나 가상값으로 채우지 않습니다. 파생거리는 추정치이며 공식 계산 검증의 정답이 아닙니다. 데이터 파일은 Git에 포함하지 않습니다. 이용조건 검토는 별도이며 추가 공개·재배포는 수행하지 않았습니다.
 
-- **2026-09-30:** MRV 80,552행과 합성 Noon 4,380행 전처리, 24,654행 운항시간 원본 복구, Partial 분리, 역할 4 데이터 계약·ERD·DDL 작성. 기존 적재 결과는 docs/role4/DB_LOAD_RESULT.md에 보관합니다.
+- **2026-09-30:** MRV 80,552행과 합성 Noon 4,380행 전처리, 24,654행 운항시간 원본 복구, Partial 분리, 해사 데이터 계약·ERD·DDL 작성. 기존 적재 결과는 docs/maritime-data/DB_LOAD_RESULT.md에 보관합니다.

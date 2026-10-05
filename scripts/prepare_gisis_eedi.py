@@ -2,7 +2,7 @@
 """Normalize the anonymized IMO GISIS EEDI workbook into a reference CSV.
 
 The source does not contain IMO numbers. Records produced here must never be
-joined to role4.vessels as if they were identified ships.
+joined to maritime_data.vessels as if they were identified ships.
 """
 
 from __future__ import annotations
@@ -230,11 +230,11 @@ def prepare(source: Path, output_dir: Path) -> dict[str, Any]:
             "fuel_type": sum(row["fuel_type"] is not None for row in rows),
         },
         "limitations": [
-            "Records are anonymized and cannot be joined to role4.vessels or annual_reports by IMO number.",
+            "Records are anonymized and cannot be joined to maritime_data.vessels or annual_reports by IMO number.",
             "EEDI is a design-efficiency reference and is not annual operational DCS/CII input.",
             "Capacity, dimensions, speed, and power are rounded by the IMO Secretariat as described in the workbook explanatory note.",
             "The workbook does not supply annual fuel consumption or annual distance travelled.",
-            "The dataset is retained as a separate reference set and is not loaded into role4 operational query views.",
+            "The dataset is retained as a separate reference set and is not loaded into maritime_data operational query views.",
         ],
     }
     summary_path = output_dir / "eedi_reference_summary.json"
