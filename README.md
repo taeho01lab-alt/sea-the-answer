@@ -9,7 +9,7 @@
 | 구성 | 실행 | 접속 |
 |---|---|---|
 | 기본 웹 앱 | `npm start` | 웹 3000, Python API 8000 |
-| Node.js·SQLite 앱 | `npm run legacy` 또는 `start.cmd` | 웹 5173 |
+| UI 워크스페이스(Node.js·SQLite) | `npm run ui` 또는 `start.cmd` | 웹 5173 |
 | 해사 데이터 독립 API | 아래 독립 API 명령 | API 8001 |
 
 웹의 해사 데이터 API는 관리자 로그인 세션과 POST CSRF 토큰을 사용합니다. 별도 서비스에서 사용하는 독립 API는 `.env.local`의 `DATABASE_URL`과 32자 이상의 `MARITIME_DATA_API_TOKEN`을 설정한 뒤 실행합니다.
@@ -167,7 +167,7 @@ npm run build
 
 Python API 테스트는 격리된 SQLite를 사용하며 실제 앱 저장소는 PostgreSQL입니다. 실제 해사 데이터 조회 검증은 적재된 PostgreSQL의 주소를 `MARITIME_DATA_TEST_DATABASE_URL`에 설정해야 실행됩니다. `npm test`는 Node.js 앱 테스트입니다.
 
-2026-10-05 검증: Python 80개·Node 15개·전처리 3개 통과, 웹 프로덕션 빌드 성공. 실제 PostgreSQL 테스트 4개는 설정 미제공으로 건너뛰었습니다. 실제 DB 이름 전환과 LLM 추론은 해당 환경에서 별도 검증이 필요합니다. 상세 검증 범위는 [통합 검증 기록](docs/INTEGRATION.md)을 참고하세요.
+2026-10-05 검증: Python 80개·Node 29개·UI 이벤트 19개·Chrome 브라우저 11개 점검 통과, Next.js 프로덕션 빌드 성공. 전처리 3개 테스트는 앞선 데이터 기능 검증에서 통과했습니다. 실제 PostgreSQL 테스트 4개는 설정 미제공으로 건너뛰었습니다. 실제 DB 이름 전환과 LLM 추론은 해당 환경에서 별도 검증이 필요합니다. 상세 범위는 [통합 검증 기록](docs/INTEGRATION.md)과 [UI 검증 기록](docs/VERIFICATION.md)을 참고하세요.
 
 | 위치 | 역할 |
 |---|---|
@@ -195,9 +195,26 @@ API 추가 시 서버에서 사용자·선박·문서 권한을 확인하고 쓰
 - 해사 데이터 조회 503: PostgreSQL 연결·`maritime_data` 적재 상태·DB 이름 전환 여부를 확인합니다.
 - 독립 API 인증 실패: `MARITIME_DATA_API_TOKEN`과 Authorization 헤더를 확인합니다.
 
-## Node.js·SQLite 앱
+## UI 워크스페이스
 
-`npm run legacy` 또는 기존 `start.cmd`/`start.ps1`은 Node.js·SQLite 버전을 5173에서 실행합니다. 새 버전과 계정·보고서 DB를 공유하지 않습니다. [기존 안내](docs/LEGACY_MVP.md), [기존 백엔드](docs/BACKEND.md), [설계 대응](docs/DESIGN.md)을 참고하세요.
+```powershell
+npm run ui
+```
+
+http://127.0.0.1:5173 에서 통합 질문·문서·운항 정보·보고서·관리 화면을 제공합니다. `npm run legacy`, `start.cmd`, `start.ps1`도 같은 UI를 실행합니다. 첫 접속은 일반 사용자로 사용할 수 있으며 관리자는 **admin / 1234**로 로그인합니다. 기본 Next.js 앱의 `captain` 계정과 SQLite·PostgreSQL DB는 별개입니다.
+
+문서 등록·개정·원본 PDF 열람, 관리자 선박·기록·CSV 관리, 운항 추이·비교, 보고서 저장·검토·승인, 이력·자동 백업을 지원합니다. 이 UI는 Node API를 사용하며 Python의 해사 데이터 스키마를 자동 조회하지 않습니다. 해사 데이터는 기본 앱의 관리자 탭 또는 독립 API에서 사용합니다. 기존 SQLite DB는 추가 테이블과 소유권 이전으로 유지하며, 이전 화면 파일은 `legacy-ui/`에 보관합니다.
+
+서버 실행에는 Node.js 24와 내장 SQLite가 필요합니다. UI 이벤트 테스트용 의존성은 저장소 루트에서 설치합니다.
+
+```powershell
+npm ci
+npm run test:ui
+# Chrome 실제 브라우저 검증
+npm run test:browser
+```
+
+Chrome 설치 경로가 기본값과 다르면 `CHROME_PATH`로 지정합니다. API와 계정·DB 상세 내용은 [UI 백엔드](docs/BACKEND.md), 화면 기능은 [UI 기능 안내](docs/UI_MIGRATION.md)를 참고하세요.
 
 ## 해사 데이터 전처리·적재
 
@@ -229,4 +246,5 @@ API 추가 시 서버에서 사용자·선박·문서 권한을 확인하고 쓰
 
 ## 문서 변경 이력
 
+- **2026-10-05:** UI 워크스페이스 실행·기능·검증 안내 추가.
 - **2026-10-05:** README를 프로젝트 기능·설치·사용·개발 안내 중심으로 정리.
