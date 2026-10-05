@@ -12,7 +12,7 @@
 
 ## API와 입력
 
-`GET /api/role4/factors`는 계수·버전·근거를 반환합니다. `POST /api/role4/calculate`는 아래 입력을 받습니다. 두 경로 모두 `Authorization: Bearer <ROLE4_API_TOKEN>`이 필요합니다. 현재 실행·인증 방법은 루트 README를 참고하세요.
+`GET /api/role4/factors`는 계수·버전·근거를 반환합니다. `POST /api/role4/calculate`는 아래 입력을 받습니다. 독립 API(8001)의 두 경로는 `Authorization: Bearer <ROLE4_API_TOKEN>`이 필요합니다. 통합 앱(8000)은 관리자 로그인 세션과 POST CSRF를 사용합니다. 현재 실행·인증 방법은 루트 README를 참고하세요.
 
 합성 예제의 VLSFO→HFO는 **개발용 가정**이며 실제 연료 증빙이 아닙니다.
 

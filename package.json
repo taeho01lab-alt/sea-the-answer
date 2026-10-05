@@ -1,0 +1,19 @@
+{
+  "name": "haedap-maritime-demo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Haedap local maritime knowledge, reports and tools",
+  "scripts": {
+    "start": "node scripts/start-stack.mjs",
+    "legacy": "node server.mjs",
+    "start:lan": "node server.mjs --lan",
+    "dev": "node scripts/start-stack.mjs",
+    "build": "npm --prefix web run build",
+    "test": "node --test tests/*.test.mjs",
+    "ingest": "node scripts/ingest.mjs"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}

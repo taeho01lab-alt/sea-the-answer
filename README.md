@@ -1,143 +1,188 @@
-# Sea the Answer
+# 해,답 — 선원 업무 지원 워크스페이스
 
-최종 업데이트: **2026-09-30**
+최종 업데이트: **2026-10-05**
 
-선박 운항 데이터의 **선정·전처리 → PostgreSQL 적재 → 읽기 전용 조회 → CO₂ 계산·입력 검증**을 담당한 산출물입니다. 기존 통합 앱과 Node.js MVP를 역할4 전용 구성으로 교체했습니다. 문서 검색, 보고서 작성, 사용자 관리 화면, 실제 LLM 연결은 포함하지 않습니다.
+문서 근거 검색, 운항 조회, Python 배출량 계산, Noon/MRV 초안을 연결합니다. 캡스톤 설계의 **Next.js + Python Tool + PostgreSQL + ChromaDB**를 기본 실행 스택으로 전환했습니다. 기존 Node.js·SQLite MVP와 데이터도 별도로 유지합니다.
 
-## 1. 완료 현황
+## 저장소 통합 및 역할4 API (2026-10-05)
 
-| 구분 | 결과 |
-|---|---|
-| 실제 MRV 전처리·적재 | 80,552행, 기본 조회 79,032행 |
-| Partial 보고 | 1,520행 보존, 기본 조회에서 제외 |
-| Synthetic Noon | 개발·검증용 4,380행 / 238항차 |
-| PostgreSQL | `role4` 스키마, 6개 테이블과 목적별 View |
-| 조회 Tool | 실제/합성 분리, 기간·선박·항차 필터, 출처·품질·단위 반환 |
-| 계산 Tool | Decimal CO₂ 산술, 개발용 기간 DWT 집약도, 부족 입력 명시 |
-| 공개 참조 자료 | GISIS EEDI 11,244행, IMO DCS 2019~2024 집계, Wikidata·MarineVessels 제원 후보 |
-| 상세 작업 설명 | 1~9단계 Markdown 및 PDF |
+`dudco/sea-the-answer`의 웹 MVP와 로컬 캡스톤의 Next.js·Python 스택을 사용자 레포의 역할4 코드에 통합했습니다. 기존 역할4 조회·계산 로직, 전처리 스크립트, 데이터 계약과 PDF는 유지합니다.
 
-위 데이터 건수는 로컬에서 확보·적재·검증한 결과입니다. **GitHub에 원본 데이터나 DB가 포함되어 있다는 의미는 아닙니다.** 실제 MRV 보고값과 계산값은 구분하며, 공식 CII 수치·등급을 생성하지 않습니다. 익명 집계값과 미검증 DWT 후보는 법정 검증 입력을 대체하지 않습니다.
+- 기본 웹 앱: `npm start`, http://127.0.0.1:3000 . Python API는 8000입니다. 아래 설치 절차의 `uv sync --frozen`과 `npm ci --prefix web`을 사용합니다.
+- 원본 웹 MVP: `npm run legacy` 또는 `start.cmd`, http://127.0.0.1:5173 . 별도 SQLite DB를 사용합니다.
+- 역할4 독립 API: `.\.venv\Scripts\python.exe -m uvicorn service.role4_standalone:create_app --factory --host 127.0.0.1 --port 8001` . 기존 Bearer 토큰 계약을 유지합니다. 토큰 클라이언트의 주소를 8001로 변경하세요. API 명세는 http://127.0.0.1:8001/docs 입니다.
 
-## 2. 파일 구성
+기존 역할4 환경이 있다면 `.env.local`과 DB를 유지하고 `.venv`에 `uv sync --frozen`으로 통합 의존성을 설치합니다. 역할4 전용 `requirements.lock.txt`는 독립 API용이며 전체 웹 앱 의존성을 포함하지 않습니다. 신규 웹 설치에는 아래 준비·실행 절차를 따르세요. 기존 DB를 사용할 때는 `python -m service.manage bootstrap`으로 앱 계정·테이블·샘플을 추가한 후 실행합니다. 이 명령은 public 스키마에 앱 테이블을 만들므로 DB 계정에 해당 권한이 필요하며 기존 role4 스키마와 데이터를 재적재하지 않습니다.
 
-| 위치 | 내용 |
-|---|---|
-| `scripts/prepare_role4.py` | 원본 6종 전처리, CSV·출처·품질 이슈 출력 |
-| `scripts/load-role4.ps1` | PostgreSQL 트랜잭션 적재 및 검증 |
-| `scripts/prepare_gisis_eedi.py` | GISIS EEDI 참조 정규화 |
-| `scripts/prepare_open_cii_references.py` | 공개 선박 제원 후보·DCS 참조 정리 |
-| `service/role4.py` | 고정 SQL 및 바인딩 매개변수 기반 조회 |
-| `service/role4_calculations.py` | CO₂·기간 지표·공식 입력 준비 상태 |
-| `service/role4_agent.py` | 선택한 scope를 유지하는 조회 도우미 |
-| `service/app.py` | 역할4 전용 FastAPI와 토큰 인증 |
-| `service/tests/` | 입력·계산·인증·PostgreSQL 조회 검증 |
-| `docs/role4/` | ERD, 데이터 정의, DDL, 계약, 검증 기록 |
-| `docs/role4/stages/`, `docs/role4/pdf/` | 기존 작업의 단계별 설명 원문과 PDF |
+웹 앱의 관리자 계정으로 로그인하면 **정형 데이터** 탭에서 MRV·합성 Noon 조회와 조회 도우미를 사용할 수 있습니다. 웹의 `/api/role4/query`, `/calculate`, `/ask`, `/factors`는 관리자 세션으로 접근하며 POST에는 CSRF 토큰이 필요합니다. 계산은 API로 제공하며 조회 화면에는 자동 연결하지 않습니다. 일반·담당자 계정은 역할4 전체 조회에 접근하지 못합니다.
 
-## 3. 설치·설정
+독립 API는 기존 `DATABASE_URL`과 32자 이상의 `ROLE4_API_TOKEN`을 사용합니다. 웹 앱은 토큰을 브라우저에 전달하지 않으며 로그인 세션을 사용합니다. 두 API가 같은 role4 조회·계산 모듈을 호출하므로 데이터 계약·십진 문자열·실제/합성 구분은 같습니다. 원본 데이터와 DB를 포함하지 않으며 최초 데이터 적재는 `scripts/load-role4.ps1`과 [데이터 확보 안내](docs/role4/DATA_ACCESS.md)를 참고하세요.
 
-준비물: **Python 3.12 또는 3.13** (잠금 파일은 Windows/Python 3.12에서 검증), 실행 중인 PostgreSQL, 별도로 확보한 원본 또는 전처리 CSV. 아래 명령은 이 README가 있는 저장소 루트에서 실행합니다. 이 저장소는 PostgreSQL 설치·기동이나 데이터를 자동 다운로드하지 않습니다.
+## 구현 범위
+
+- 로그인, 관리자/담당자/일반 사용자 역할, 선박 배정, 제한 문서, 권한 변경 시 세션 철회
+- PDF/JSON 등록, 페이지·조항·발행처·버전·적용 조건, 개정 및 폐기
+- BM25 키워드 + Chroma 벡터 검색의 순위 결합(RRF), 검색 전후 권한 필터
+- 자연어 문서/운항/계산/초안 분기, 근거 부족 및 모델 오류의 명시적 대체 경로
+- Noon 데이터 입력·수정·삭제, 단위/범위 검증, 선박 비교, 연료 급변 표시, 재현 가능한 계산
+- Noon/MRV 초안 저장·편집·Markdown/JSON 내보내기, 생성 시점 근거·입력 스냅샷, 동시 수정 충돌 검출
+- 질의·변경·계산 이력, 체크섬 백업 및 빈 DB 복원
+
+**한계:** 초기 자료는 가상 선박 2척·운항 14건과 기존 공개 요약/가상 문서입니다. 공식 CII 등급·규정 적합성은 판정하지 않습니다. OCR, 표 셀 구조 복원, 공식 MRV 제출 서식과 다국어 검색 평가는 후속 범위입니다. 실제 외부/로컬 LLM 추론은 미검증이며 모델 미설정 시 원문 근거와 Python 결과를 표시합니다. KPI 달성을 주장하지 않습니다.
+
+## 1. 준비 및 실행
+
+Node.js 24 LTS, Python 3.12, uv, PostgreSQL 18이 필요합니다. 명령은 **이 README가 있는 저장소 루트**에서 실행합니다. uv가 없다면 `python -m pip install uv`로 설치하세요.
+
+### Windows
 
 ```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.lock.txt
-Copy-Item .env.example .env.local
-.\.venv\Scripts\python.exe -c "import secrets; print(secrets.token_urlsafe(32))"
+powershell -ExecutionPolicy Bypass -File scripts/setup-local.ps1
+npm start
 ```
 
-`.env.local`의 `DATABASE_URL`에 본인의 DB 주소·계정을 설정하고, 생성한 문자열을 `ROLE4_API_TOKEN`에 입력합니다. 기존 `.env.local`이 있으면 복사하지 말고 필요한 항목만 추가하세요. 예시의 포트 55432는 기존 로컬 환경 값이며, 다른 서버에서는 실제 포트를 사용합니다.
+PostgreSQL 경로가 다르면 설치 명령에 `-PgBin 'D:\PostgreSQL\18\bin'`을 붙입니다. 기본은 `C:\Program Files\PostgreSQL\18\bin`입니다. 잠금 파일로 의존성을 설치하고 전용 DB를 `data/postgres`, `127.0.0.1:55432`에 생성합니다. 기존 시스템 DB와 `.env.local`은 덮어쓰지 않습니다. 앱 DB 계정은 비슈퍼유저입니다.
 
-DB/사용자가 없으면 pgAdmin에서 별도 DB와 소유 계정을 먼저 생성하세요. 적재에는 스키마 생성 권한이 필요합니다. 팀 앱 운영 시에는 적재 후 `role4` 스키마 USAGE와 테이블 SELECT만 가진 별도 조회 계정 사용을 권장합니다. API는 public 앱 테이블을 생성하거나 수정하지 않습니다.
+웹: **http://127.0.0.1:3000**, Python API: http://127.0.0.1:8000. 최초 계정은 `captain`, 무작위 비밀번호는 **`data/initial-login.txt`**에 있습니다. `start-design.cmd`로도 실행할 수 있습니다. Ctrl+C로 개발 서버를 종료합니다.
 
-Linux에서는 `python3.12 -m venv .venv`, `.venv/bin/python`을 사용합니다. 아래 적재 PowerShell 스크립트는 Windows용이며 Linux 자동 적재는 검증하지 않았습니다.
-
-## 4. 전처리 및 DB 적재
-
-원본 파일 목록·출처·공개 범위는 [데이터 확보 안내](docs/role4/DATA_ACCESS.md)에 있습니다. 팀에서 제공받은 원본 6개가 있는 폴더를 지정합니다. 같은 이름의 파일이 여러 개 있으면 중단하며 결과 폴더는 새 경로여야 합니다.
+컴퓨터 재시작 후에는 전용 DB를 먼저 시작하세요.
 
 ```powershell
-.\.venv\Scripts\python.exe scripts/prepare_role4.py --source 'D:/Data' --out data/role4/new-run
-.\.venv\Scripts\python.exe scripts/test_prepare_role4.py
-./scripts/load-role4.ps1 -DataDir data/role4/new-run
+.\.venv\Scripts\python.exe -m service.manage local-db
+npm start
 ```
 
-이미 전처리 CSV를 보유했다면 전처리를 건너뛰고 해당 폴더를 `-DataDir`에 지정합니다. 기본 폴더는 `data/role4/2026-09-30-v2`입니다. PostgreSQL 설치 위치가 다르면 `-PgBin 'D:/PostgreSQL/18/bin'`을 추가합니다.
+별도 DB를 `.env.local`에 설정했다면 해당 DB를 직접 시작하세요. 서비스·자동 시작·외부 공개는 구성하지 않습니다.
 
-적재 스크립트는 **로컬 DB만 지원**하고, `role4` 스키마가 이미 있으면 덮어쓰지 않습니다. CSV 누락·무결성 검증 실패 시 전체 트랜잭션을 롤백합니다. 현재 검증 SQL의 건수 기준은 위에 기재한 선정 데이터 버전용입니다. 새 버전 데이터는 기대값을 검토한 뒤 별도 DB에서 검증하세요.
+### Linux / 별도 PostgreSQL
 
-6개 테이블: `source_files`, `vessels`, `synthetic_voyages`, `annual_reports`, `synthetic_noon`, `quality_issues`. 참조 자료는 별도 파일로 보관하고 운영 조회 View에 혼합하지 않습니다.
+전용 빈 데이터베이스와 비슈퍼유저 소유 계정을 준비하고 `.env.example`을 `.env.local`로 복사해 DB URL을 설정합니다. Windows 전용 `local-db` 대신 준비한 DB를 사용하세요.
 
-## 5. API 실행·사용
+```bash
+uv sync --frozen --python 3.12
+npm ci --prefix web
+mkdir -p data
+.venv/bin/python -m service.manage bootstrap
+npm start
+```
+
+Ubuntu 실행은 아직 검증하지 않았습니다. 기존 SQLite 자료의 PostgreSQL 자동 이전은 수행하지 않습니다. 기존 MVP를 계속 사용할 수 있으며 필요한 문서는 JSON으로 등록하세요.
+
+## 2. 벡터 검색
+
+기본 BM25는 모델 다운로드가 필요 없습니다. 다음 명령은 공개 ONNX MiniLM 임베딩 모델(약 79MB)을 최초 다운로드하고 Chroma를 색인합니다.
 
 ```powershell
-.\.venv\Scripts\python.exe -m uvicorn service.app:create_app --factory --host 127.0.0.1 --port 8000
+.\.venv\Scripts\python.exe -m service.manage prepare-vectors
 ```
 
-API 명세: http://127.0.0.1:8000/docs . `Authorize`에 본인의 토큰을 입력해 테스트합니다. `/api/health`는 프로세스 상태만 확인하며 DB 연결 성공을 의미하지 않습니다.
+`.env.local`의 `VECTOR_ENABLED=1`로 바꾸고 앱을 재시작합니다. 준비 후 검색은 외부 모델 호출 없이 동작합니다. 모델/색인 오류 시 BM25로 전환하고 경고합니다. PostgreSQL이 원본·권한·활성 버전의 기준이며 Chroma는 재생성 가능한 색인입니다. 기본 영문 MiniLM과 한영 해사 용어 사전을 사용하므로 한국어 검색 품질은 별도 평가가 필요합니다.
 
-별도 PowerShell에서 토큰을 입력하고 조회합니다.
+## 3. 사용 및 문서 등록
+
+1. 로그인 후 선박·기간을 선택합니다. 샘플 기간은 **2026-09-11~2026-09-17**입니다.
+2. **통합 질의:** `현재 선박의 배출량과 관련 IMO 규정을 알려줘`, `Noon Report 초안을 만들어줘` 등을 입력합니다. 계산 대상은 상단의 명시적 선박·기간입니다. 자유문에서 임의 수치를 추출해 DB를 변경하지 않습니다.
+3. **운항 데이터:** 조회·계산·선박 비교와 JSON 등록/수정/삭제. 연료 t, 거리 nm, 속력 kn, DWT t를 사용합니다. 환산계수는 입력값이며 공식 적용성을 자동 확인하지 않습니다.
+4. **문서·근거:** PDF/JSON 등록, 동일 논리 ID의 새 버전 추가, 폐기. 구버전은 검색에서 제외하고 이전 보고서 근거로 보존합니다.
+5. **보고서:** 명시적으로 초안을 저장한 뒤 편집하고 Markdown/원본 포함 JSON을 내려받습니다. 담당자 검토 전 공식 제출 문서가 아닙니다.
+6. **관리:** 사용자 생성, 역할/선박 배정/비활성화, 선박 등록. 권한이 바뀐 사용자는 다시 로그인해야 합니다.
+
+```json
+{
+  "logical_id": "training-guide",
+  "title": "교육용 운항 안내",
+  "version": "1.0",
+  "kind": "sample",
+  "issuer": "교육 자료",
+  "issued_at": "2026-09-29",
+  "applicability": "가상 선박 교육용",
+  "restricted": false,
+  "vessels": ["HAE-01"],
+  "source_url": "",
+  "sections": [{"page": 1, "section": "1. 기록", "text": "교육용 가상 문서입니다. 담당자가 입력값과 단위를 확인합니다."}]
+}
+```
+
+`kind`: `official-summary`, `onboard`, `sample`. 모르는 페이지는 `null`로 둡니다. PDF는 JSON의 `sections` 대신 본문을 추출합니다. 제한은 10MB/250페이지/추출 100만 자이며 스캔·암호화 PDF는 거절합니다. 원본 PDF 파일 자체는 저장하지 않으므로 별도 보존하세요. 관리자의 빈 `vessels`는 전체 선박 공개, 담당자는 배정 선박을 지정해야 합니다. `restricted: true`는 일반 사용자 비공개입니다.
+
+## 4. 선택적 LLM 연결
+
+기본은 `LLM_ENABLED=0`입니다. 함수 호출과 JSON 출력이 가능한 OpenAI 호환 Chat Completions 서버를 연결합니다. 외부 모델을 켜면 질문과 접근 가능한 문서 발췌가 해당 서버로 전송됩니다.
+
+```dotenv
+# .env.local — 로컬 모델 예시
+LLM_ENABLED=1
+LLM_BASE_URL=http://127.0.0.1:11434/v1
+LLM_MODEL=YOUR_INSTALLED_MODEL
+LLM_API_KEY=
+ALLOW_EXTERNAL_LLM=0
+```
+
+GPT API는 `LLM_BASE_URL=https://api.openai.com/v1`, 사용 가능한 모델명, 서버 전용 `LLM_API_KEY`, `ALLOW_EXTERNAL_LLM=1`을 설정하세요. 재시작 후 **근거 기반 AI 답변**을 선택할 때만 호출합니다. 모델/학교 크레딧 계정은 자동 생성하지 않습니다. 도구는 읽기 전용 경로를 선택하고 계산은 Python이 수행합니다. 근거 ID·인용문 검사가 문장 전체의 의미적 정합성을 증명하지는 않습니다. 오류 시 원문 근거로 전환합니다.
+
+## 5. 백업·복원
 
 ```powershell
-$token = Read-Host 'ROLE4_API_TOKEN' -AsSecureString
-$plainToken = [System.Net.NetworkCredential]::new('', $token).Password
-$headers = @{ Authorization = "Bearer $plainToken" }
-$body = @{ dataset = 'real_annual'; year_start = 2020; year_end = 2025; limit = 20 } | ConvertTo-Json
-$result = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8000/api/role4/query' -Headers $headers -ContentType 'application/json' -Body $body
-$result.rows | Format-Table reporting_year, vessel_id, fuel_t, co2_t
+.\.venv\Scripts\python.exe -m service.manage backup
+# 반드시 별도로 준비한 빈 DB에 복원
+.\.venv\Scripts\python.exe -m service.manage restore --path data/backups/FILE.json --database-url 'postgresql+psycopg://USER:PASSWORD@127.0.0.1:55432/EMPTY_DB'
 ```
 
-| API | 용도 |
-|---|---|
-| `POST /api/role4/query` | MRV 연도별 / 합성 Noon 날짜·항차별 조회 |
-| `GET /api/role4/factors` | 고정 버전 계산계수·단위·출처 |
-| `POST /api/role4/calculate` | CO₂ 산술·기간 지표·계산 불가 사유 |
-| `POST /api/role4/ask` | 고정 scope의 규칙 기반 조회 도우미 |
+사용자(비밀번호 해시)·선박·운항·문서/청크·보고서·이력을 일관된 스냅샷으로 저장합니다. 기존 파일/비어 있지 않은 DB는 덮어쓰지 않습니다. 세션·API 키·DB 비밀번호는 제외합니다. 백업의 비밀이 아닌 설정은 참고용이며 `.env.local`에 수동 재적용해야 합니다. 복구 DB로 설정을 바꾼 뒤 `prepare-vectors`를 실행하세요. 백업, 비밀 설정, 원본 PDF는 접근 제한을 적용해 별도 보관하세요.
 
-모든 Tool은 **Bearer 토큰**이 필요합니다. 기존 통합 앱의 `/api/login`, 관리자 세션, CSRF, Next.js 화면은 이 배포판에서 제공하지 않습니다. 토큰 보유자는 역할4 데이터 전체를 조회할 수 있으므로 팀 앱에 연동할 때 사용자·선박별 권한 검사를 추가해야 합니다. 토큰은 브라우저 코드에 넣지 말고 서버에서 사용하세요. 기본 바인딩은 로컬이며 외부 서비스 배포 시 HTTPS 및 운영 인증 구성이 필요합니다.
-
-조회는 최대 200행이며 `next_offset`으로 다음 페이지를 요청합니다. numeric은 정밀도를 유지하는 십진 문자열, 결측은 null입니다. PostgreSQL 읽기 전용·반복 읽기 트랜잭션과 SQL 문장당 5초 제한을 적용합니다. 성공한 조회·계산의 요약 이벤트는 `role4.audit` logger에 남기며 영구 감사 저장소는 포함하지 않습니다.
-
-계산 요청 예시:
-
-```powershell
-$calculation = @{
-  scope = @{ dataset = 'synthetic_noon'; vessel_id = 'SYN:SIM-BULK-01'; start = '2025-01-01'; end = '2025-12-31' }
-  fuel_mappings = @(@{ fuel_label = 'VLSFO'; category = 'HFO'; evidence = 'Development assumption only; not certified fuel evidence' })
-} | ConvertTo-Json -Depth 5
-Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8000/api/role4/calculate' -Headers $headers -ContentType 'application/json' -Body $calculation
-```
-
-위 연료 매핑은 **개발용 가정**입니다. 선정된 합성 데이터 기준 365행, CO₂ 13502.104704t, 기간 DWT 집약도 5.028268이 기대값이며 실제 선박의 공식 CII가 아닙니다. 필요한 입력이 없으면 `blocked`와 이유를 반환합니다. 도우미의 `use_model=true`도 이 배포판에서는 `LLM_NOT_CONFIGURED` 경고와 함께 규칙 경로로 처리됩니다.
-
-## 6. 검증
+## 6. 개발 및 검증
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe scripts/test_prepare_role4.py
+npm test
+npm run build
 ```
 
-기본 테스트는 실제 DB가 필요 없으며 PostgreSQL 통합 테스트는 건너뜁니다. 선정 데이터를 이미 적재했다면 `ROLE4_TEST_DATABASE_URL`을 해당 DB URL로 설정하여 통합 테스트도 실행할 수 있습니다. 테스트는 기존 role4 데이터를 읽기만 하며 재적재하지 않습니다.
+새 서비스 테스트는 외래키를 켠 격리 SQLite를 사용하며 실제 앱 저장소는 PostgreSQL입니다. `npm test`는 기존 MVP 회귀 테스트입니다. 2026-09-29 검증: 새 서비스 28개, 기존 MVP 15개 통과, Next.js 프로덕션 빌드 성공. 로컬 PostgreSQL·Chroma 질의 및 브라우저 보고서 저장 확인. 실제 LLM 추론, Ubuntu 실행, 대규모 부하와 KPI/SUS 평가는 미검증입니다.
 
-최신 배포 검증 결과는 [배포 검증 기록](docs/role4/RELEASE_VALIDATION.md)에 기록합니다. 과거 단계 문서의 전체 서비스 83개 테스트는 기존 통합 앱의 기록이며 현재 전용 배포판 테스트 개수와 다릅니다.
+| 위치 | 역할 |
+|---|---|
+| `web/app/` | Next.js 화면, 로컬 API 프록시 |
+| `service/app.py` | 인증·권한·업무 API, `/docs`에 API 명세 |
+| `service/storage.py` | 테이블과 제약 조건 |
+| `service/retrieval.py` | PDF 청크·BM25·Chroma·권한 필터 |
+| `service/calculations.py` | 입력 검증·계산·보고서 템플릿 |
+| `service/llm.py` | 모델 Gateway와 규칙 대체 경로 |
+| `service/manage.py` | DB·샘플·색인·백업·복원 |
+| `service/tests/` | 권한·업무·PDF·복원 검증 |
 
-## 7. 상세 문서 및 단계별 PDF
-
-- [데이터 계약·ERD](docs/role4/ROLE4_DATA_CONTRACT.md), [SQL 스키마](docs/role4/role4_schema.sql), [적재 결과](docs/role4/DB_LOAD_RESULT.md)
-- [조회 계약](docs/role4/QUERY_TOOL.md), [계산 계약](docs/role4/CALCULATION_TOOL.md)
-- [단계별 작업 설명](docs/role4/stages), [단계별 PDF 9종](docs/role4/pdf)
-
-PDF와 단계별 문서는 **작업 당시의 구현 과정 기록**입니다. 특히 5·6단계의 통합 앱 로그인·화면·Agent 연결 설명은 과거 구성입니다. 현재 실행 방법은 이 README와 조회·계산 계약을 기준으로 확인하세요.
+API 추가 시 서버에서 역할/선박/문서 권한을 확인하고 쓰기에는 CSRF 토큰을 요구하세요. Pydantic 입력 검증과 Python 계산을 사용하고 화면에서 재산정하지 않습니다. DB 변경은 기존 자료를 보존하는 명시적 마이그레이션이 필요합니다. 현재는 초기 스키마와 가산적 색인 생성만 제공합니다.
 
 ## 문제 해결
 
-- 시작 시 설정 오류: `.env.local`의 DB URL과 32자 이상 API 토큰을 확인합니다.
-- 401/403: Authorization 헤더 누락 또는 토큰 불일치입니다.
-- 422: 입력 계약·기간·행 수 상한을 확인합니다.
-- 503: PostgreSQL 기동·주소·권한·role4 적재 여부 및 조회 제한시간을 확인합니다.
-- 전처리 원본 없음: 저장소에는 원본이 포함되지 않습니다. 데이터 확보 안내와 팀 보유본을 확인합니다.
-- 공식 CII가 null: 버그가 아니라 검증된 연간 입력 부족 및 미구현 범위의 명시입니다.
+- DB 연결 실패: 전용 DB 시작 명령, `.env.local`, PostgreSQL 경로를 확인합니다.
+- 빈 결과: 샘플 기간/배정 선박/문서 현재 버전과 권한을 확인합니다.
+- 벡터 경고: 준비 명령, `CHROMA_PATH` 및 쓰기 권한을 확인하고 재색인합니다.
+- 포트 사용 중: 기존 개발 서버 종료 후 재실행. 웹 3000/API 8000/DB 55432입니다.
+- 비밀번호 파일 없음: `bootstrap`은 기존 관리자 비밀번호를 재발급하지 않습니다.
 
-## 변경 이력
+## 기존 MVP 및 변경 이력
 
-- **2026-09-30:** 기존 원격 저장소의 내용을 역할4 전용 코드·문서·PDF로 교체. 원래 조회·계산 로직을 유지하면서 독립 FastAPI와 토큰 인증, 실행 안내를 구성. 원본 데이터·로컬 DB·비밀번호는 제외. 이전 버전은 Git 커밋 이력에서 복구 가능.
+- **2026-10-05:** 사용자 main의 역할4 전용 API를 보존하면서 원본 웹 MVP·캡스톤 앱 복원, 관리자 세션 기반 역할4 조회와 감사 기록 통합. 검증 결과는 `docs/INTEGRATION.md` 참고.
+
+`npm run legacy` 또는 기존 `start.cmd`/`start.ps1`은 Node.js·SQLite 버전을 5173에서 실행합니다. 새 버전과 계정·보고서 DB를 공유하지 않습니다. [기존 안내](docs/LEGACY_MVP.md), [기존 백엔드](docs/BACKEND.md), [설계 대응](docs/DESIGN.md)을 참고하세요.
+
+- **2026-09-29:** 설계 스택으로 기본 실행 전환, 인증/역할·PDF/개정/RAG·Python 계산·보고서/이력·백업복원. 기존 MVP·데이터 보존, 실행 경로 구분.
+- 이전 변경 내역은 기존 README 보관본에 있습니다.
+
+## 역할 4 데이터 전처리 (2026-09-30)
+
+실제 MRV 보고기간 집계와 합성 Noon 개발 데이터를 분리했습니다. [데이터 계약·ERD](docs/role4/ROLE4_DATA_CONTRACT.md), [실행 결과](docs/role4/VALIDATION.md)를 참고하세요. 새 정의는 기존 19개 테이블 초안 전체를 대체하지 않습니다. 적재 스크립트와 검증 SQL을 제공합니다. 기존 role4 스키마는 덮어쓰지 않으며 원본·전처리 CSV와 실제 DB는 Git에 포함하지 않습니다.
+
+원본 6개 파일이 있는 폴더를 지정합니다. 하위 폴더도 탐색하며 같은 이름이 둘 이상이면 중단합니다. 원본은 읽기만 하고 결과 폴더는 매번 새 이름을 사용합니다.
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r scripts/requirements-role4.txt
+.\.venv\Scripts\python.exe scripts/prepare_role4.py --source 'D:/Data' --out data/role4/new-run
+.\.venv\Scripts\python.exe scripts/test_prepare_role4.py
+.\.venv\Scripts\python.exe scripts/describe_role4.py --out docs/role4
+```
+
+실행 결과는 원본 체크섬·출처 목록, 별도 연간/합성 일별 CSV, 선박·가상 항차 키, 품질 이슈 CSV, 원본 레코드 JSONL, summary.json입니다. 빈 값은 임의로 0이나 가상값으로 채우지 않습니다. 파생거리는 추정치이며 공식 계산 검증의 정답이 아닙니다. 데이터 파일은 Git에 포함하지 않습니다. 이용조건 검토는 별도이며 추가 공개·재배포는 수행하지 않았습니다.
+
+- **2026-09-30:** MRV 80,552행과 합성 Noon 4,380행 전처리, 24,654행 운항시간 원본 복구, Partial 분리, 역할 4 데이터 계약·ERD·DDL 작성. 기존 적재 결과는 docs/role4/DB_LOAD_RESULT.md에 보관합니다.
