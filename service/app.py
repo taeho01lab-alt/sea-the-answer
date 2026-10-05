@@ -20,9 +20,9 @@ from .security import password_hash, password_valid, hash_token, session_user, r
 from .calculations import NoonInput, metrics, report_text
 from .retrieval import Search, pdf_sections, chunk_sections
 from .llm import Gateway
-from . import maritime_data
-from . import maritime_data_agent
-from . import maritime_data_calculations
+from tools.maritime_data import query as maritime_data
+from tools.maritime_data import agent as maritime_data_agent
+from tools.maritime_data import calculations as maritime_data_calculations
 
 load_dotenv('.env.local')
 log = logging.getLogger('haedap')

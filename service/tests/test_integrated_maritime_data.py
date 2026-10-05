@@ -2,7 +2,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
-from service import maritime_data, maritime_data_calculations
+from tools.maritime_data import query as maritime_data, calculations as maritime_data_calculations
 from service.storage import Audit
 from service.tests.test_workflows import app, login
 

@@ -15,10 +15,10 @@
 웹의 해사 데이터 API는 관리자 로그인 세션과 POST CSRF 토큰을 사용합니다. 별도 서비스에서 사용하는 독립 API는 `.env.local`의 `DATABASE_URL`과 32자 이상의 `MARITIME_DATA_API_TOKEN`을 설정한 뒤 실행합니다.
 
 ```powershell
-.\.venv\Scripts\python.exe -m uvicorn service.maritime_data_standalone:create_app --factory --host 127.0.0.1 --port 8001
+.\.venv\Scripts\python.exe -m uvicorn tools.maritime_data.api:create_app --factory --host 127.0.0.1 --port 8001
 ```
 
-독립 API는 `Authorization: Bearer <토큰>`을 사용합니다. API 명세는 http://127.0.0.1:8001/docs 입니다. 두 API가 같은 해사 데이터 조회·계산 모듈을 사용합니다. 요청 예시는 [조회 계약](docs/maritime-data/QUERY_TOOL.md)과 [계산 계약](docs/maritime-data/CALCULATION_TOOL.md)을 참고하세요.
+독립 API는 `Authorization: Bearer <토큰>`을 사용합니다. API 명세는 http://127.0.0.1:8001/docs 입니다. 두 API가 같은 해사 데이터 조회·계산 모듈을 사용합니다. 요청 예시는 [조회·계산 계약](docs/maritime-data/API.md)을 참고하세요.
 
 | 경로 | 기능 |
 |---|---|
@@ -89,7 +89,7 @@ npm ci --prefix web
 npm start
 ```
 
-`bootstrap`은 public 스키마에 앱 테이블과 초기 계정·샘플을 추가합니다. DB 계정에 테이블 생성 권한이 필요하며 해사 데이터 스키마는 재적재하지 않습니다. `requirements.lock.txt`는 독립 API용이므로 전체 앱 설치에는 `uv sync --frozen`을 사용합니다.
+`bootstrap`은 public 스키마에 앱 테이블과 초기 계정·샘플을 추가합니다. DB 계정에 테이블 생성 권한이 필요하며 해사 데이터 스키마는 재적재하지 않습니다. `tools/maritime_data/requirements.lock.txt`는 독립 API용이므로 전체 앱 설치에는 `uv sync --frozen`을 사용합니다.
 
 ## 2. 벡터 검색
 
@@ -160,14 +160,14 @@ ALLOW_EXTERNAL_LLM=0
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe scripts/test_prepare_maritime_data.py
+.\.venv\Scripts\python.exe tools/maritime_data/scripts/test_prepare_maritime_data.py
 npm test
 npm run build
 ```
 
 Python API 테스트는 격리된 SQLite를 사용하며 실제 앱 저장소는 PostgreSQL입니다. 실제 해사 데이터 조회 검증은 적재된 PostgreSQL의 주소를 `MARITIME_DATA_TEST_DATABASE_URL`에 설정해야 실행됩니다. `npm test`는 Node.js 앱 테스트입니다.
 
-2026-10-05 검증: Python 80개·Node 29개·UI 이벤트 19개·Chrome 브라우저 11개 점검 통과, Next.js 프로덕션 빌드 성공. 전처리 3개 테스트는 앞선 데이터 기능 검증에서 통과했습니다. 실제 PostgreSQL 테스트 4개는 설정 미제공으로 건너뛰었습니다. 실제 DB 이름 전환과 LLM 추론은 해당 환경에서 별도 검증이 필요합니다. 상세 범위는 [통합 검증 기록](docs/INTEGRATION.md)과 [UI 검증 기록](docs/VERIFICATION.md)을 참고하세요.
+2026-10-05 검증: Python 80개·Node 29개·UI 이벤트 19개·Chrome 브라우저 11개 점검 통과, Next.js 프로덕션 빌드 성공. 이번 재배치 후 Python 80개·전처리 3개 테스트도 다시 통과했습니다. 실제 PostgreSQL 테스트 4개는 설정 미제공으로 건너뛰었습니다. 실제 DB 이름 전환과 LLM 추론은 해당 환경에서 별도 검증이 필요합니다. 상세 범위는 [검증 기록](docs/VERIFICATION.md)을 참고하세요.
 
 | 위치 | 역할 |
 |---|---|
@@ -176,8 +176,8 @@ Python API 테스트는 격리된 SQLite를 사용하며 실제 앱 저장소는
 | `service/storage.py` | 테이블과 제약 조건 |
 | `service/retrieval.py` | PDF 청크·BM25·Chroma·권한 필터 |
 | `service/calculations.py` | 입력 검증·계산·보고서 템플릿 |
-| `service/maritime_data*.py` | 해사 데이터 조회·계산·조회 도우미·독립 API |
-| `scripts/` | 설치·실행·전처리·적재 도구 |
+| `tools/maritime_data/` | 해사 데이터 조회·계산·독립 API·전처리·SQL·테스트 |
+| `scripts/` | 프로젝트 설치·실행·문서 수집·UI 검증 |
 | `docs/` | 설계·데이터 계약·API 상세 문서 |
 | `service/llm.py` | 모델 Gateway와 규칙 대체 경로 |
 | `service/manage.py` | DB·샘플·색인·백업·복원 |
@@ -218,18 +218,18 @@ Chrome 설치 경로가 기본값과 다르면 `CHROME_PATH`로 지정합니다.
 
 ## 해사 데이터 전처리·적재
 
-실제 MRV는 보고기간 단위, 합성 Noon은 개발용 일별 자료로 구분합니다. [데이터 확보 안내](docs/maritime-data/DATA_ACCESS.md)에 따라 원본 파일을 준비합니다. [데이터 계약·ERD](docs/maritime-data/DATA_CONTRACT.md)와 [적재 결과](docs/maritime-data/DB_LOAD_RESULT.md)에 테이블·단위·출처·품질 기준을 설명합니다. 원본·전처리 CSV·DB는 Git에 포함하지 않습니다.
+실제 MRV는 보고기간 단위, 합성 Noon은 개발용 일별 자료로 구분합니다. [데이터 확보 안내](docs/maritime-data/DATA_ACCESS.md)에 따라 원본 파일을 준비합니다. [데이터 계약·ERD](docs/maritime-data/DATA_CONTRACT.md)와 [데이터 확보 안내](docs/maritime-data/DATA_ACCESS.md)에 테이블·단위·출처·품질 기준을 설명합니다. 원본·전처리 CSV·DB는 Git에 포함하지 않습니다.
 
 원본 6개 파일이 있는 폴더를 지정합니다. 하위 폴더도 탐색하며 같은 이름이 둘 이상이면 중단합니다. 원본은 읽기만 하고 결과 폴더는 매번 새 이름을 사용합니다.
 
 ```powershell
-.\.venv\Scripts\python.exe scripts/prepare_maritime_data.py --source 'D:/Data' --out data/maritime-data/new-run
-./scripts/load-maritime-data.ps1 -DataDir data/maritime-data/new-run
+.\.venv\Scripts\python.exe tools/maritime_data/scripts/prepare_maritime_data.py --source 'D:/Data' --out data/maritime-data/new-run
+./tools/maritime_data/scripts/load-maritime-data.ps1 -DataDir data/maritime-data/new-run
 ```
 
 이미 전처리한 CSV가 있으면 첫 명령을 건너뛰고 해당 폴더를 `-DataDir`에 지정합니다. 적재 스크립트는 Windows의 로컬 PostgreSQL을 대상으로 합니다. PostgreSQL 설치 경로가 다르면 `-PgBin`으로 지정합니다. 기존 `maritime_data` 스키마가 있으면 중단하며 CSV·무결성 검증 실패 시 적재를 롤백합니다. 검증 SQL은 선정 데이터 버전의 기대 건수를 사용하므로 다른 버전은 기대값을 검토해야 합니다.
 
-전처리 결과는 원본 체크섬·출처 목록, 연간/합성 일별 CSV, 선박·가상 항차 키, 품질 이슈 CSV, 원본 레코드 JSONL, summary.json입니다. 결측은 임의로 채우지 않고 파생거리는 추정치로 구분합니다. DDL·데이터 사전 생성은 `python scripts/describe_maritime_data.py --out docs/maritime-data`로 실행합니다.
+전처리 결과는 원본 체크섬·출처 목록, 연간/합성 일별 CSV, 선박·가상 항차 키, 품질 이슈 CSV, 원본 레코드 JSONL, summary.json입니다. 결측은 임의로 채우지 않고 파생거리는 추정치로 구분합니다. DDL·데이터 사전 생성은 `python tools/maritime_data/scripts/describe_maritime_data.py`로 실행합니다.
 
 ### 기존 DB 이름 전환
 
@@ -237,14 +237,16 @@ Chrome 설치 경로가 기본값과 다르면 `CHROME_PATH`로 지정합니다.
 
 ```powershell
 # 변경 여부 확인
-.\.venv\Scripts\python.exe scripts/migrate_maritime_data.py
+.\.venv\Scripts\python.exe tools/maritime_data/scripts/migrate_maritime_data.py
 # 실제 이름 변경
-.\.venv\Scripts\python.exe scripts/migrate_maritime_data.py --apply
+.\.venv\Scripts\python.exe tools/maritime_data/scripts/migrate_maritime_data.py --apply
 ```
 
 스키마 이름과 설정 키만 변경하며 테이블·뷰·데이터·권한은 유지합니다. 이름 또는 설정 값 충돌 시 중단하고, 설정 변경 전 `.env.local.before-maritime-data` 백업을 남깁니다. DB 변경 후 설정 파일 저장이 실패하면 파일 권한을 확인하고 재실행하세요. 기존 CSV 폴더는 이동하지 않습니다. 프로세스·배포 환경변수는 `MARITIME_DATA_API_TOKEN` / `MARITIME_DATA_TEST_DATABASE_URL`로 직접 갱신하고 API 클라이언트는 위 경로를 사용하세요.
 
 ## 문서 변경 이력
+
+- **2026-10-05:** 해사 데이터 도구를 `tools/maritime_data/`로 이동. 단계별 기록·중복 PDF·구버전 안내를 삭제하고 API 계약을 통합.
 
 - **2026-10-05:** UI 워크스페이스 실행·기능·검증 안내 추가.
 - **2026-10-05:** README를 프로젝트 기능·설치·사용·개발 안내 중심으로 정리.
